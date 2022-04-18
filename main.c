@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <alloca.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <err.h>
@@ -54,16 +55,14 @@ int main(int argc, char *argv[]) {
         printf("> Connection from %s : %d \n", ip, cli_addr.sin6_port);
         
         if (cli_fd == -1) {
-            perror("> Failed to accept\n");
-            printf("\n");
+            printf("> Failed to accept\n");
             continue;
         }
 
         int buf_size = 4096;
         char buf[buf_size];
         if (recv(cli_fd, buf, buf_size, 0) < 1) {
-            perror("> Error receiving request from connection\n");
-            printf("\n");
+            printf("> Error receiving request from connection\n");
             continue;
         }
 
@@ -83,34 +82,30 @@ int main(int argc, char *argv[]) {
 
         int fd = open(filepath, O_RDONLY);
         if (fd < 0) {
-            perror("=> Failed to open requested file\n");
-            printf("\n");
+            printf("=> Failed to open requested file\n");
             continue;
         }
         int len = lseek(fd, 0, SEEK_END);
         if (fd < 0) {
-            perror("=> Failed lseek in requested file\n");
-            printf("\n");
+            printf("=> Failed lseek in requested file\n");
             continue;
         }
         char *data = mmap(0, len, PROT_READ, MAP_PRIVATE, fd, 0);
         if (fd < 0) {
-            perror("=> Failed mmap of requested file\n");
-            printf("\n");
+            printf("=> Failed mmap of requested file\n");
             continue;
         }
         
-        char *response = malloc(strlen(header) + strlen(data) + strlen(end));
+        char *response = alloca(strlen(header) + strlen(data) + strlen(end));
         strcat(response, header);
         strcat(response, data);
         strcat(response, end);
         write(cli_fd, response, strlen(response));
         close(cli_fd);
-        // free(response);
-        // if (munmap(data, len) < 0) {
-        //     perror("=> Failed munmap of requested file");
-        //     continue;
-        // }
+        if (munmap(data, len) < 0) {
+            printf("=> Failed munmap of requested file");
+            continue;
+        }
     }
 
     close(sock_fd);
