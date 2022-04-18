@@ -2,34 +2,28 @@
 #include <sys/socket.h>
 #include <sys/types.h> 
 #include <arpa/inet.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <err.h>
 
 #include "preprocessor_html.h"
 
+#define ROOT_FILE "crust.html"
 #define BACKLOG_SIZE 5
 
-char response[] = "HTTP/1.1 200 OK\r\n"
-"Content-Type: text/html; charset=UTF-8\r\n\r\n"
-DOCTYPE("html")
-TAG("html",
-    TAG("head",
-        TAG("title", "C server")
-        TAG("style", "body { font-family: sans-serif; color: fuchsia; }\n")
-    )
-    TAG("body",
-        TAG("h1", "Server says hello!\n")
-    )
-)"\r\n";
+char header[] = "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/html; charset=UTF-8\r\n\r\n";
+char end[] = "\r\n";
 
 int main(int argc, char *argv[]) {
     int port;
     if (argc >= 2) port = atoi(argv[1]);
     else port = 8080;
-
 
     int sock_fd = socket(AF_INET6, SOCK_STREAM, 0);
     if (sock_fd < 0) err(1, "Failed to open socket");
@@ -51,21 +45,72 @@ int main(int argc, char *argv[]) {
     listen(sock_fd, BACKLOG_SIZE);
 
     struct sockaddr_in6 cli_addr;
+    printf("Listening on port %d ...\n", port);
     while(1) {
-        printf("Listening on port %d...\n", port);
         int cli_fd = accept(sock_fd, (struct sockaddr *) &cli_addr, &addr_size);
 
         char ip[30];
         inet_ntop(AF_INET6, &cli_addr.sin6_addr, ip, addr_size);
-        printf("> Connection from %s, %d\n", ip, cli_addr.sin6_port);
+        printf("> Connection from %s : %d \n", ip, cli_addr.sin6_port);
         
         if (cli_fd == -1) {
-            perror("> Failed to accept");
+            perror("> Failed to accept\n");
+            printf("\n");
             continue;
         }
 
-        write(cli_fd, response, sizeof(response)-1); /*-1:'\0'*/
+        int buf_size = 4096;
+        char buf[buf_size];
+        if (recv(cli_fd, buf, buf_size, 0) < 1) {
+            perror("> Error receiving request from connection\n");
+            printf("\n");
+            continue;
+        }
+
+        strtok(buf, " ");
+        char *url = strtok(NULL, " ");
+        printf("=> %s\n", url);
+
+        char *filepath;
+        if (strcmp(url, "/") == 0) {
+            // Requested root
+            filepath = malloc(strlen(ROOT_FILE)-1);
+            filepath = ROOT_FILE;
+        } else {
+            url++;
+            filepath = url;
+        }
+
+        int fd = open(filepath, O_RDONLY);
+        if (fd < 0) {
+            perror("=> Failed to open requested file\n");
+            printf("\n");
+            continue;
+        }
+        int len = lseek(fd, 0, SEEK_END);
+        if (fd < 0) {
+            perror("=> Failed lseek in requested file\n");
+            printf("\n");
+            continue;
+        }
+        char *data = mmap(0, len, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (fd < 0) {
+            perror("=> Failed mmap of requested file\n");
+            printf("\n");
+            continue;
+        }
+        
+        char *response = malloc(strlen(header) + strlen(data) + strlen(end));
+        strcat(response, header);
+        strcat(response, data);
+        strcat(response, end);
+        write(cli_fd, response, strlen(response));
         close(cli_fd);
+        // free(response);
+        // if (munmap(data, len) < 0) {
+        //     perror("=> Failed munmap of requested file");
+        //     continue;
+        // }
     }
 
     close(sock_fd);

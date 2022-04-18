@@ -1,0 +1,16 @@
+.textSection {
+    font: Tahoma;
+    color: Red;
+    background-color: Yellow;
+    text-align: center;
+    max-width: 500px;
+
+}
+
+img {
+    width: 250px;
+}
+
+h1 {
+    font: CourierNew;
+}
