@@ -17,12 +17,11 @@
 #define ROOT_FILE "crust.html"
 #define BACKLOG_SIZE 5
 
-
 // TODO - specify content types properly (currently omitting so browser assumes)
 // char header[] = "HTTP/1.1 200 OK\r\n"
-//                 "Content-Type: text/html; charset=UTF-8\r\n\r\n";
+//                 "Content-Type: text/html; charset=UTF-8\r\n";
 char header[] = "HTTP/1.1 200 OK\r\n"
-                "\r\n\r\n";
+                "\r\n";
 char end[] = "\r\n";
 
 int main(int argc, char *argv[]) {
@@ -90,21 +89,24 @@ int main(int argc, char *argv[]) {
             continue;
         }
         int len = lseek(fd, 0, SEEK_END);
-        if (fd < 0) {
+        if (len < 0) {
             printf("=> Failed lseek in requested file\n");
             continue;
         }
         char *data = mmap(0, len, PROT_READ, MAP_PRIVATE, fd, 0);
-        if (fd < 0) {
+        if ((void *) data == (void *) -1) {
             printf("=> Failed mmap of requested file\n");
             continue;
         }
         
-        char *response = alloca(strlen(header) + strlen(data) + strlen(end));
-        strcat(response, header);
-        strcat(response, data);
-        strcat(response, end);
-        write(cli_fd, response, strlen(response));
+        char *response = alloca(strlen(header) + len + strlen(end));
+        memcpy(response, header, strlen(header));
+        memcpy(&response[strlen(header)], data, len);
+        memcpy(&response[strlen(header) + len], end, strlen(end));
+        printf("==> %d\n", len);
+        printf("--> %d %s \n", strlen(header) + len + strlen(end), response);
+        printf("wrote %d bytes\n", send(cli_fd, response, strlen(header) + len + strlen(end), 0));
+        // printf("%s\n\n", strerror(errno));
         close(cli_fd);
         if (munmap(data, len) < 0) {
             printf("=> Failed munmap of requested file\n");
