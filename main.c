@@ -17,8 +17,12 @@
 #define ROOT_FILE "crust.html"
 #define BACKLOG_SIZE 5
 
+
+// TODO - specify content types properly (currently omitting so browser assumes)
+// char header[] = "HTTP/1.1 200 OK\r\n"
+//                 "Content-Type: text/html; charset=UTF-8\r\n\r\n";
 char header[] = "HTTP/1.1 200 OK\r\n"
-                "Content-Type: text/html; charset=UTF-8\r\n\r\n";
+                "\r\n\r\n";
 char end[] = "\r\n";
 
 int main(int argc, char *argv[]) {
