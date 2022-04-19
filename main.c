@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
         char *filepath;
         if (strcmp(url, "/") == 0) {
             // Requested root
-            filepath = malloc(strlen(ROOT_FILE)-1);
+            filepath = alloca(strlen(ROOT_FILE)-1);
             filepath = ROOT_FILE;
         } else {
             url++;
@@ -107,7 +107,7 @@ int main(int argc, char *argv[]) {
         write(cli_fd, response, strlen(response));
         close(cli_fd);
         if (munmap(data, len) < 0) {
-            printf("=> Failed munmap of requested file");
+            printf("=> Failed munmap of requested file\n");
             continue;
         }
     }
