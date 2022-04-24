@@ -19,12 +19,10 @@
 #define BACKLOG_SIZE 5
 
 // TODO - specify content types properly (currently omitting so browser assumes)
-// char header[] = "HTTP/1.1 200 OK\r\n"
 //                 "Content-Type: text/html; charset=UTF-8\r\n";
 char header[] = "HTTP/1.1 200 OK\r\n"
                 "\r\n";
 char end[] = "\r\n";
-
 
 void *serve(void *cli_fd_p) {
     int cli_fd = (int) cli_fd_p;
@@ -76,39 +74,24 @@ void *serve(void *cli_fd_p) {
     return NULL;
 }
 
-
-int main(int argc, char *argv[]) {
+struct server {
     int port;
-    if (argc >= 2) port = atoi(argv[1]);
-    else port = 8080;
-
-    int sock_fd = socket(AF_INET6, SOCK_STREAM, 0);
-    if (sock_fd < 0) err(1, "Failed to open socket");
-
-    setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (void *)1, sizeof(int));
-
-    struct sockaddr_in6 svr_addr = {
-        .sin6_family = AF_INET6,
-        .sin6_addr = IN6ADDR_ANY_INIT,
-        .sin6_port = htons(port)
-    };
-    socklen_t addr_size = sizeof(svr_addr);
-    
-    if (bind(sock_fd, (struct sockaddr *) &svr_addr, sizeof(svr_addr)) < 0) {
-        close(sock_fd);
-        err(1, "Failed to bind socket to server address");
-    }
-
-    listen(sock_fd, BACKLOG_SIZE);
-
+    int sock_fd;
+    struct sockaddr_in6 svr_addr;
     struct sockaddr_in6 cli_addr;
-    printf("Listening on port %d ...\n", port);
+    socklen_t addr_size;
+    void (*listen)(struct server *);
+    void (*destroy)(struct server *);
+};
+
+void server_listen(struct server *this) {
+    printf("Listening on port %d ...\n", this->port);
     while(1) {
-        int cli_fd = accept(sock_fd, (struct sockaddr *) &cli_addr, &addr_size);
+        int cli_fd = accept(this->sock_fd, (struct sockaddr *) &(this->cli_addr), &(this->addr_size));
 
         char ip[30];
-        inet_ntop(AF_INET6, &cli_addr.sin6_addr, ip, addr_size);
-        printf("> Connection from %s : %d \n", ip, cli_addr.sin6_port);
+        inet_ntop(AF_INET6, &(this->cli_addr.sin6_addr), ip, this->addr_size);
+        printf("> Connection from %s : %d \n", ip, this->cli_addr.sin6_port);
         
         if (cli_fd == -1) {
             printf("> Failed to accept\n");
@@ -122,7 +105,43 @@ int main(int argc, char *argv[]) {
         }
         if (pthread_detach(thread) != 0) printf("> Failed to detach pthread\n");
     }
+}
 
-    close(sock_fd);
+void server_destroy(struct server *this) {
+    close(this->sock_fd);
+    free(this);
+}
+
+struct server *create_server(int port) {
+    struct server *new_server = malloc(sizeof(struct server));
+    new_server->port = port;
+    new_server->sock_fd = socket(AF_INET6, SOCK_STREAM, 0);
+    if (new_server->sock_fd < 0) err(1, "Failed to open socket");
+    setsockopt(new_server->sock_fd, SOL_SOCKET, SO_REUSEADDR, (void *)1, sizeof(int));
+    new_server->svr_addr = (struct sockaddr_in6) {
+        .sin6_family = AF_INET6,
+        .sin6_addr = IN6ADDR_ANY_INIT,
+        .sin6_port = htons(port)
+    };
+    new_server->addr_size = sizeof(new_server->svr_addr);
+    if (bind(new_server->sock_fd, (struct sockaddr *) &(new_server->svr_addr), sizeof(new_server->svr_addr)) < 0) {
+        close(new_server->sock_fd);
+        err(1, "Failed to bind socket to server address");
+    }
+    if (listen(new_server->sock_fd, BACKLOG_SIZE) < 0) err(1, "Failed to set socket to passive with listen()");
+    new_server->listen = &server_listen;
+    new_server->destroy = &server_destroy;
+    return new_server;
+}
+
+
+int main(int argc, char *argv[]) {
+    int port;
+    if (argc >= 2) port = atoi(argv[1]);
+    else port = 8080;
+
+    struct server *s = create_server(port);
+    s->listen(s);
+    s->destroy(s);
     return 0;
 }

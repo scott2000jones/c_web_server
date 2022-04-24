@@ -1,7 +1,7 @@
 CXX= gcc
 RM= rm -f
 
-CFLAGS= -O3 -Wall -Wextra
+CFLAGS= -O3 -Wall -Wextra -std=c17
 LIBS= -pthread 
 
 all: main
