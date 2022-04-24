@@ -4,7 +4,7 @@
 #include <arpa/inet.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-#include <pthread.h>
+#include <threads.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,13 +24,13 @@ char header[] = "HTTP/1.1 200 OK\r\n"
                 "\r\n";
 char end[] = "\r\n";
 
-void *serve(void *cli_fd_p) {
+int serve(void *cli_fd_p) {
     int cli_fd = (int) cli_fd_p;
     int buf_size = 4096;
     char buf[buf_size];
     if (recv(cli_fd, buf, buf_size, 0) < 1) {
         printf("> Error receiving request from connection\n");
-        return NULL;
+        return -1;
     }
 
     strtok(buf, " ");
@@ -50,17 +50,17 @@ void *serve(void *cli_fd_p) {
     int fd = open(filepath, O_RDONLY);
     if (fd < 0) {
         printf("=> Failed to open requested file\n");
-        return NULL;
+        return -1;
     }
     int len = lseek(fd, 0, SEEK_END);
     if (len < 0) {
         printf("=> Failed lseek in requested file\n");
-        return NULL;
+        return -1;
     }
     char *data = mmap(0, len, PROT_READ, MAP_PRIVATE, fd, 0);
     if ((void *) data == (void *) -1) {
         printf("=> Failed mmap of requested file\n");
-        return NULL;
+        return -1;
     }
     
     char *response = alloca(strlen(header) + len + strlen(end));
@@ -71,7 +71,7 @@ void *serve(void *cli_fd_p) {
     close(cli_fd);
     if (munmap(data, len) < 0) printf("=> Failed munmap of requested file\n");
     
-    return NULL;
+    return 0;
 }
 
 struct server {
@@ -98,12 +98,12 @@ void server_listen(struct server *this) {
             continue;
         }
 
-        pthread_t thread;
-        if (pthread_create(&thread, NULL, &serve, (void *) cli_fd) != 0) {
-            printf("> Failed to create pthread\n");
+        thrd_t thread;
+        if (thrd_create(&thread, &serve, (void *) cli_fd) != thrd_success) {
+            printf("> Failed to create C11 thread\n");
             continue;
         }
-        if (pthread_detach(thread) != 0) printf("> Failed to detach pthread\n");
+        if (thrd_detach(thread) != thrd_success) printf("> Failed to detach C11 thread\n");
     }
 }
 
